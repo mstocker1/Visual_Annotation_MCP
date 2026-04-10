@@ -7,3 +7,6 @@ dist/
 build/
 .env
 .python-version
+
+# Generated at build time by hatch-vcs
+visual_annotation_mcp/_version.py

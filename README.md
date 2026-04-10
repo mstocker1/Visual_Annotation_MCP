@@ -1,5 +1,9 @@
 # Visual Annotation MCP
 
+[![PyPI](https://img.shields.io/pypi/v/visual-annotation-mcp.svg)](https://pypi.org/project/visual-annotation-mcp/)
+[![Python](https://img.shields.io/pypi/pyversions/visual-annotation-mcp.svg)](https://pypi.org/project/visual-annotation-mcp/)
+[![License](https://img.shields.io/pypi/l/visual-annotation-mcp.svg)](LICENSE)
+
 A Model Context Protocol server that lets an LLM open web pages, list the
 interactive elements on them, take screenshots, and draw annotations —
 circles, ellipses, rectangles, arrows, and labeled text boxes — with
@@ -89,21 +93,35 @@ outside the target's bounding box, leaving the element sharp. Good for
 
 ## Installation
 
+### From PyPI (recommended)
+
 ```bash
-git clone <this-repo>
+pip install visual-annotation-mcp
+visual-annotation-mcp-install-browsers   # downloads headless Chromium
+```
+
+The second step is required once per machine: `pip` installs the Python
+package but not the browser binary Playwright needs. It's equivalent to
+`python -m playwright install chromium` but discoverable from the installed
+console scripts.
+
+Python **3.11+** is required.
+
+### From source (for development)
+
+```bash
+git clone https://github.com/mstocker1/Visual_Annotation_MCP
 cd Visual_Annotation_MCP
 
 python -m venv .venv
 # Windows
 .venv\Scripts\pip install -e .
-.venv\Scripts\python -m playwright install chromium
+.venv\Scripts\visual-annotation-mcp-install-browsers
 # macOS / Linux
 source .venv/bin/activate
 pip install -e .
-python -m playwright install chromium
+visual-annotation-mcp-install-browsers
 ```
-
-Python 3.11 or newer is required.
 
 ## Wiring it into Claude Code
 
@@ -235,9 +253,12 @@ list raises an error. Leave unset to allow all hosts.
 
 ```
 Visual_Annotation_MCP/
+├── .github/workflows/
+│   └── publish.yml           # Build + PyPI trusted publishing on git tag
 ├── .mcp.json                 # Project-scoped MCP config
 ├── CLAUDE.md                 # Claude Code project instructions
-├── pyproject.toml
+├── LICENSE                   # MIT
+├── pyproject.toml            # PEP 621 metadata, hatch-vcs dynamic versioning
 ├── README.md
 ├── scripts/
 │   ├── run_visual_mcp.ps1    # Windows launcher (prefers repo .venv)
@@ -248,10 +269,49 @@ Visual_Annotation_MCP/
     ├── __main__.py           # python -m visual_annotation_mcp
     ├── annotate.py           # Shape primitives, blur, contrast picker
     ├── browser_session.py    # Playwright session wrapper
+    ├── install.py            # visual-annotation-mcp-install-browsers
     ├── security.py           # Optional host allowlist
     └── server.py             # FastMCP tool definitions
 ```
 
+## Releasing
+
+Versioning is driven by git tags via
+[`hatch-vcs`](https://github.com/ofek/hatch-vcs): the version injected into
+the built wheel is whatever the most recent `v*` tag is, with a dev suffix
+for untagged commits. You never edit a version number by hand.
+
+One-time PyPI setup (per project):
+
+1. Create the project once on PyPI (either by uploading the very first
+   release manually with `twine`, or by configuring a *pending* trusted
+   publisher without any release yet).
+2. In the project's **Publishing** settings on pypi.org, add a new
+   **Trusted Publisher** with:
+   - PyPI project name: `visual-annotation-mcp`
+   - Owner: `mstocker1`
+   - Repository: `Visual_Annotation_MCP`
+   - Workflow name: `publish.yml`
+   - Environment name: `pypi`
+3. On GitHub, create an environment named `pypi` under
+   **Settings → Environments** (no secrets needed with trusted publishing;
+   optionally add a deployment protection rule for extra safety).
+
+After that, cutting a release is:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+`.github/workflows/publish.yml` will build the sdist and wheel, upload them
+to PyPI, and attach the artefacts to the workflow run.
+
+Regular pushes and pull requests also run the build step (without
+publishing) so broken packaging changes get caught in CI.
+
 ## License
 
-MIT (or whatever you prefer — none is set yet).
+MIT — see [LICENSE](LICENSE). This project depends on third-party libraries
+(`mcp`, `playwright`, `pillow`) via pip and does not embed their source
+code, so their licenses do not propagate to your use of this package.

@@ -39,7 +39,24 @@ class BrowserSession:
         if self._browser is not None:
             return
         self._playwright = await async_playwright().start()
-        self._browser = await self._playwright.chromium.launch(headless=True)
+        try:
+            self._browser = await self._playwright.chromium.launch(headless=True)
+        except Exception as exc:
+            # Give a clearer, actionable error when Chromium hasn't been
+            # downloaded yet — this is the single most common first-run failure
+            # for pip-installed users.
+            msg = str(exc)
+            hints = ("executable doesn't exist", "playwright install", "browser is not installed")
+            if any(h in msg.lower() for h in hints):
+                await self._playwright.stop()
+                self._playwright = None
+                raise RuntimeError(
+                    "Playwright Chromium is not installed. Run one of:\n"
+                    "  visual-annotation-mcp-install-browsers\n"
+                    "  python -m playwright install chromium\n"
+                    f"(original error: {exc})"
+                ) from exc
+            raise
         context = await self._browser.new_context(
             viewport={"width": 1280, "height": 720},
             device_scale_factor=1,

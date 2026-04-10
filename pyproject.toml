@@ -1,20 +1,73 @@
 [project]
 name = "visual-annotation-mcp"
-version = "0.1.0"
-description = "MCP server: open pages, inspect elements, screenshot, and highlight regions"
+dynamic = ["version"]
+description = "MCP server: navigate, inspect elements, screenshot, and annotate web pages with smart color contrast and background blur."
+readme = "README.md"
 requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [
+  { name = "Michael Stocker", email = "mstockerjr@outlook.com" },
+]
+keywords = [
+  "mcp",
+  "model-context-protocol",
+  "playwright",
+  "screenshot",
+  "annotation",
+  "highlight",
+  "claude",
+  "anthropic",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Topic :: Internet :: WWW/HTTP :: Browsers",
+  "Topic :: Multimedia :: Graphics",
+]
 dependencies = [
-    "mcp>=1.2.0",
-    "playwright>=1.40.0",
-    "pillow>=10.0.0",
+  "mcp>=1.2.0,<2",
+  "playwright>=1.40.0,<2",
+  "pillow>=10.0.0",
 ]
 
 [project.scripts]
 visual-annotation-mcp = "visual_annotation_mcp.server:main"
+visual-annotation-mcp-install-browsers = "visual_annotation_mcp.install:main"
+
+[project.urls]
+Homepage      = "https://github.com/mstocker1/Visual_Annotation_MCP"
+Repository    = "https://github.com/mstocker1/Visual_Annotation_MCP"
+Issues        = "https://github.com/mstocker1/Visual_Annotation_MCP/issues"
+Changelog     = "https://github.com/mstocker1/Visual_Annotation_MCP/releases"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.21", "hatch-vcs>=0.4"]
 build-backend = "hatchling.build"
+
+# Dynamic version from git tags. `git tag v0.2.0 && git push --tags` becomes
+# version 0.2.0 at build time. Between tags you get a dev/local version
+# string like `0.2.0.dev3+g1a2b3c4`.
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "visual_annotation_mcp/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["visual_annotation_mcp"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/visual_annotation_mcp",
+  "/README.md",
+  "/LICENSE",
+  "/pyproject.toml",
+]

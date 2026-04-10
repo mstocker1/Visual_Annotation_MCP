@@ -6,7 +6,13 @@
       "mcp__visual-annotation__screenshot_viewport",
       "mcp__visual-annotation__highlight_element",
       "Bash(.venv/Scripts/python -c \":*)",
-      "Bash(.venv/Scripts/python tests/smoke_test.py)"
+      "Bash(.venv/Scripts/python tests/smoke_test.py)",
+      "Bash(.venv/Scripts/python -m build)",
+      "Bash(python -m venv /tmp/vamcp_verify)",
+      "Read(//tmp/vamcp_verify/Scripts/**)",
+      "Bash(/tmp/vamcp_verify/Scripts/pip install:*)",
+      "Bash(/tmp/vamcp_verify/Scripts/python -c \":*)",
+      "Bash(ls /tmp/vamcp_verify/Scripts/visual-annotation-mcp*)"
     ]
   }
 }
