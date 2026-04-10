@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__visual-annotation__navigate",
+      "mcp__visual-annotation__inspect_elements",
+      "mcp__visual-annotation__screenshot_viewport",
+      "mcp__visual-annotation__highlight_element",
+      "Bash(.venv/Scripts/python -c \":*)"
+    ]
+  }
+}

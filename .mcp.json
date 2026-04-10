@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "visual-annotation": {
+      "type": "stdio",
+      "command": "${VISUAL_ANNOTATION_PYTHON:-python}",
+      "args": ["-m", "visual_annotation_mcp"],
+      "env": {}
+    }
+  }
+}
