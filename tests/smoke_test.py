@@ -204,6 +204,8 @@ def _extract_page_data_url() -> str:
 
 
 async def main() -> None:
+    os.environ.setdefault("VISUAL_ANNOTATION_ALLOW_UNRESTRICTED", "1")
+
     url = _sample_page_data_url()
     flow_url = _flow_page_data_url()
     form_url = _form_page_data_url()
@@ -309,7 +311,7 @@ async def main() -> None:
                     return el["id"]
             raise AssertionError(f"No flow element matched predicate; report={flow_report}")
 
-        email_id = flow_find2(lambda el: (el.get("dom_id") or "") == "email")
+        _ = flow_find2(lambda el: (el.get("dom_id") or "") == "email")
 
         fill_selector_msg = await session.fill_by_selector("#email", "qa@example.com")
         assert "Filled selector" in fill_selector_msg

@@ -53,15 +53,18 @@ This document is the Sprint 6 template for release candidate and GA communicatio
 - Optional host allowlist: `VISUAL_ANNOTATION_ALLOWED_HOSTS`
 - Optional upload path allowlist: `VISUAL_ANNOTATION_ALLOWED_PATHS`
 - Optional telemetry events: `VISUAL_ANNOTATION_TELEMETRY=1`
+- Development-only unrestricted override: `VISUAL_ANNOTATION_ALLOW_UNRESTRICTED=1`
 
 2. If you rely on `upload_file`, verify files are under approved roots when path allowlist is enabled.
 
-3. If you ingest logs, parse JSON lines and key off:
+3. Default policy is deny-by-default for navigation and local file access unless allowlists are configured.
+
+4. If you ingest logs, parse JSON lines and key off:
 - `request_id`
 - `event`
 - `tool`
 
-4. For CI consumers, mirror quality gates locally:
+5. For CI consumers, mirror quality gates locally:
 - `ruff check .`
 - `pydocstyle visual_annotation_mcp`
 - `mypy visual_annotation_mcp`

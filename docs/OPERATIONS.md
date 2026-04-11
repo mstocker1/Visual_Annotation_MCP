@@ -20,9 +20,11 @@ Sensitive values are automatically redacted for common secret keys (`password`, 
 - `VISUAL_ANNOTATION_TELEMETRY=1`
   - Enables extra telemetry metric events.
 - `VISUAL_ANNOTATION_ALLOWED_HOSTS=host1,host2`
-  - Restricts navigations to approved hosts.
+  - Allows navigation only to approved hosts.
 - `VISUAL_ANNOTATION_ALLOWED_PATHS=pathA,pathB`
-  - Restricts `upload_file` to approved roots.
+  - Allows `upload_file` only under approved roots.
+- `VISUAL_ANNOTATION_ALLOW_UNRESTRICTED=1`
+  - Development-only override that disables default-deny restrictions.
 
 ## Observability Tool
 
@@ -87,7 +89,7 @@ print(dict(failures))
 
 3. Symptom: navigation denied.
 - Confirm target host is listed in `VISUAL_ANNOTATION_ALLOWED_HOSTS`.
-- Remove allowlist in lower environments if unrestricted navigation is intended.
+- For local debugging only, set `VISUAL_ANNOTATION_ALLOW_UNRESTRICTED=1`.
 
 4. Symptom: high average latency for screenshot/highlight tools.
 - Reduce screenshot scope (`full_page=False`, lower context needs).

@@ -1,10 +1,15 @@
-"""Optional URL host allowlist via VISUAL_ANNOTATION_ALLOWED_HOSTS."""
+"""Security policy helpers for URL and local file access."""
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
 from urllib.parse import urlparse
+
+
+def allow_unrestricted() -> bool:
+    raw = os.environ.get("VISUAL_ANNOTATION_ALLOW_UNRESTRICTED", "").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
 
 
 def allowed_hosts() -> frozenset[str] | None:
@@ -43,7 +48,12 @@ def assert_file_path_allowed(file_path: str) -> Path:
     candidate = Path(file_path).expanduser().resolve()
     roots = allowed_file_roots()
     if roots is None:
-        return candidate
+        if allow_unrestricted():
+            return candidate
+        raise ValueError(
+            "File access denied by default. Configure VISUAL_ANNOTATION_ALLOWED_PATHS "
+            "or set VISUAL_ANNOTATION_ALLOW_UNRESTRICTED=1 for development-only open mode."
+        )
 
     for root in roots:
         if _is_relative_to(candidate, root):
@@ -56,9 +66,15 @@ def assert_file_path_allowed(file_path: str) -> Path:
 
 
 def assert_url_allowed(url: str) -> None:
+    if allow_unrestricted():
+        return
+
     hosts = allowed_hosts()
     if hosts is None:
-        return
+        raise ValueError(
+            "Navigation denied by default. Configure VISUAL_ANNOTATION_ALLOWED_HOSTS "
+            "or set VISUAL_ANNOTATION_ALLOW_UNRESTRICTED=1 for development-only open mode."
+        )
     parsed = urlparse(url)
     host = (parsed.hostname or "").lower()
     if not host:

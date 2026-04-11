@@ -33,7 +33,7 @@ jobs:
           python -m pip install -e .[dev]
 
       - name: Lint (ruff)
-        run: ruff check visual_annotation_mcp tests/test_flow_contracts.py tests/test_flow_executor.py tests/test_observability.py tests/test_security.py
+        run: ruff check visual_annotation_mcp tests/test_flow_contracts.py tests/test_flow_executor.py tests/test_observability.py tests/test_security.py tests/test_contrast.py tests/test_arrow_label_placement.py
 
       - name: Docstring quality (pydocstyle)
         run: pydocstyle visual_annotation_mcp

@@ -8,7 +8,7 @@
 A Model Context Protocol server that lets an LLM open web pages, list the
 interactive elements on them, take screenshots, and draw annotations —
 circles, ellipses, rectangles, arrows, and labeled text boxes — with
-smart color contrast and optional background blur.
+heuristic color contrast selection and optional background blur.
 
 Built on top of [Playwright](https://playwright.dev/python/) (headless
 Chromium) and [Pillow](https://pillow.readthedocs.io/).
@@ -41,6 +41,22 @@ navigate  →  inspect_elements  →  highlight_element  →  (annotate_last_ima
    produced by the previous tool call, so annotations can be stacked.
 8. **`run_flow`** — run a JSON list of steps for repeatable multi-step
   journeys (for example: signup, onboarding, checkout).
+
+## Why One Server
+
+This project intentionally combines three related capabilities in one MCP
+server because they all depend on the same browser session state:
+
+1. Page automation (navigate, click, fill, waits).
+2. Visual capture (viewport/element screenshots).
+3. Annotation rendering (highlights, arrows, labels).
+
+Keeping them together avoids cross-process handoff overhead, reduces state
+drift, and allows one deterministic workflow from interaction to final image.
+
+`run_flow` is included as an optional server-side macro for deterministic
+replays (CI, smoke, scripted journeys). Agent-led orchestration remains the
+preferred path for exploratory reasoning-heavy tasks.
 
 All shape drawing, color resolution, and image effects live in
 `visual_annotation_mcp/annotate.py` and can be used as a normal Python library
@@ -88,6 +104,20 @@ tunable per call:
 - `prefer_color` accepts any CSS color string, so users can say "always
   circle in lime" while still getting automatic contrast correction.
 
+Important: this uses Euclidean RGB distance as a pragmatic visibility
+heuristic. It is **not** a WCAG 2.x luminance contrast-ratio implementation
+and should not be presented as WCAG-compliant accessibility scoring.
+
+## Visual Example
+
+Before:
+
+![Before annotation](docs/assets/example_before.png)
+
+After:
+
+![After annotation](docs/assets/example_after.png)
+
 ### Labels
 `label="Click here"` draws a bordered text box near the element. The fill and
 text colors are picked automatically for legibility against whatever pixels
@@ -120,6 +150,7 @@ For local pre-release verification:
 ```bash
 python -m pip install -e .[dev]
 ruff check visual_annotation_mcp tests/test_flow_contracts.py tests/test_flow_executor.py tests/test_observability.py tests/test_security.py
+ruff check tests/test_contrast.py tests/test_arrow_label_placement.py
 pydocstyle visual_annotation_mcp
 mypy visual_annotation_mcp
 coverage run -m unittest discover -s tests -p "test_*.py"
@@ -220,6 +251,17 @@ python tests/smoke_test.py
 It exercises every shape, the label, the blur effect, the contrast fallback,
 `annotate_last_image` stacking, and raw screenshots against an in-memory
 data URL. It exits non-zero on any assertion failure.
+
+## Test Strategy
+
+This repository uses Python's built-in `unittest` as the single test runner.
+Test files are still named `test_*.py` for compatibility with discovery tools,
+but all canonical commands use `unittest` discovery.
+
+Core annotation behavior now has dedicated fast unit tests in:
+
+- `tests/test_contrast.py`
+- `tests/test_arrow_label_placement.py`
 
 ## Tool reference
 
@@ -428,10 +470,10 @@ Return in-memory per-tool metrics as JSON:
 - avg_ms
 - max_ms
 
-## Optional URL allowlist
+## URL policy (default deny)
 
-Set `VISUAL_ANNOTATION_ALLOWED_HOSTS` in the MCP server's environment to
-restrict which hosts can be navigated to:
+Navigation is denied by default. Set `VISUAL_ANNOTATION_ALLOWED_HOSTS` in the
+MCP server's environment to allow specific hosts:
 
 ```json
 {
@@ -449,12 +491,15 @@ restrict which hosts can be navigated to:
 ```
 
 Comma-separated hostnames, no scheme. Any navigation to a host outside the
-list raises an error. Leave unset to allow all hosts.
+list raises an error.
 
-## Optional file path allowlist (uploads)
+For development-only open mode, set `VISUAL_ANNOTATION_ALLOW_UNRESTRICTED=1`.
 
-Set `VISUAL_ANNOTATION_ALLOWED_PATHS` in the MCP server environment to
-restrict file uploads to approved roots:
+## File policy (default deny)
+
+Local file access for `upload_file` is denied by default. Set
+`VISUAL_ANNOTATION_ALLOWED_PATHS` in the MCP server environment to allow
+approved roots:
 
 ```json
 {
@@ -471,7 +516,9 @@ restrict file uploads to approved roots:
 }
 ```
 
-When set, `upload_file` rejects any path outside the configured roots.
+`upload_file` rejects any path outside the configured roots.
+
+For development-only open mode, set `VISUAL_ANNOTATION_ALLOW_UNRESTRICTED=1`.
 
 ## Optional telemetry flag
 

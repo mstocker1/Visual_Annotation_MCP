@@ -86,14 +86,13 @@ source = ["visual_annotation_mcp"]
 branch = true
 omit = [
   "visual_annotation_mcp/__main__.py",
-  "visual_annotation_mcp/annotate.py",
   "visual_annotation_mcp/browser_session.py",
   "visual_annotation_mcp/install.py",
   "visual_annotation_mcp/server.py",
 ]
 
 [tool.coverage.report]
-fail_under = 55
+fail_under = 70
 show_missing = true
 skip_covered = true
 
@@ -124,6 +123,13 @@ module = [
   "visual_annotation_mcp.server",
 ]
 ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = [
+  "visual_annotation_mcp.flow_contracts",
+  "visual_annotation_mcp.flow_executor",
+]
+strict = true
 
 [tool.pydocstyle]
 convention = "pep257"
