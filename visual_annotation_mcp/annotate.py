@@ -250,17 +250,25 @@ def _draw_arrow(
 
 
 def _arrow_endpoints_for_bbox(
-    x: float, y: float, width: float, height: float, img_size: tuple[int, int]
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+    img_size: tuple[int, int],
+    min_length: int = 0,
 ) -> tuple[tuple[float, float], tuple[float, float]]:
     """
     Compute sensible arrow endpoints for an arrow pointing at the given bbox.
     Prefers to come from above; falls back to below, right, or left if the
     top edge doesn't have enough room in the image.
+
+    ``min_length`` bumps the arrow up to at least that many pixels long — used
+    by the caller to reserve room for a label that will sit at the tail end.
     """
     W, H = img_size
     cx = x + width / 2.0
     cy = y + height / 2.0
-    length = max(40, int(min(width, height)) + 30)
+    length = max(40, int(min(width, height)) + 30, int(min_length))
 
     # Try top, bottom, right, left (in that order) and pick the first that fits.
     candidates = [
@@ -274,6 +282,49 @@ def _arrow_endpoints_for_bbox(
             return tail, tip
     # Fall back to top even if it clips — better than nothing.
     return candidates[0][2], candidates[0][1]
+
+
+def _label_anchor_at_arrow_tail(
+    tail: tuple[float, float],
+    tip: tuple[float, float],
+    label_w: int,
+    label_h: int,
+    img_size: tuple[int, int],
+    gap: int = 6,
+) -> tuple[int, int]:
+    """
+    Return the top-left anchor for a label that should sit at the **tail** end
+    of an arrow going from ``tail`` → ``tip``.
+
+    The label is centered on the point that lies just past the tail, in the
+    direction opposite the tip, so the arrow appears to emerge from the
+    label's edge nearest the target: ``[ label ]──▶ target``. This avoids the
+    label ever covering the arrow shaft, which was the previous behavior when
+    the label was anchored to the target bbox instead of the arrow.
+    """
+    W, H = img_size
+    dx = tip[0] - tail[0]
+    dy = tip[1] - tail[1]
+    length = math.hypot(dx, dy)
+    if length == 0:
+        # Degenerate arrow — fall back to centering the label on the tail.
+        ax = int(_clamp(tail[0] - label_w / 2.0, 0, max(0, W - label_w)))
+        ay = int(_clamp(tail[1] - label_h / 2.0, 0, max(0, H - label_h)))
+        return ax, ay
+
+    ux = dx / length
+    uy = dy / length
+    # Projected half-extent of the label in the arrow direction, plus a gap so
+    # the label edge sits a few pixels off the tail point.
+    half_extent = (abs(ux) * label_w + abs(uy) * label_h) / 2.0 + gap
+    center_x = tail[0] - ux * half_extent
+    center_y = tail[1] - uy * half_extent
+    ax = int(round(center_x - label_w / 2.0))
+    ay = int(round(center_y - label_h / 2.0))
+    # Clamp into the image bounds so we still render if the image is tight.
+    ax = int(_clamp(ax, 0, max(0, W - label_w)))
+    ay = int(_clamp(ay, 0, max(0, H - label_h)))
+    return ax, ay
 
 
 def _measure_text(
@@ -407,7 +458,12 @@ def annotate_region(
     label:
         Optional text drawn in a bordered text box near the bbox.
     label_position:
-        Preferred side for the label (``auto`` tries bottom → top → right → left).
+        Preferred side for the label relative to the bbox (``auto`` tries
+        bottom → top → right → left). **Special case:** when ``style='arrow'``
+        and ``label_position='auto'``, the label is instead anchored to the
+        arrow's tail end so the arrow appears to emerge from the label
+        (``[ label ]──▶ target``). Pass an explicit side (``'top'`` etc.) to
+        force bbox-relative placement for arrows too.
     blur_background:
         If True, gaussian-blur everything outside the bbox so the target pops.
     """
@@ -429,17 +485,41 @@ def annotate_region(
     if not resolved_color:
         resolved_color = _FALLBACK_COLOR
 
-    # Step 3 — draw the shape on an overlay.
+    # Step 3 — pre-measure the label (if any). We need its dimensions before
+    # drawing an arrow so the arrow can be extended far enough to leave room
+    # for the label to sit beyond its tail.
+    label_w = label_h = 0
+    label_padding = 8
+    label_font_size = 16
+    if label:
+        _measure_draw = ImageDraw.Draw(im)
+        _measure_font = _load_font(label_font_size)
+        _tw, _th = _measure_text(_measure_draw, label, _measure_font)
+        label_w = _tw + label_padding * 2
+        label_h = _th + label_padding * 2
+
+    # Step 4 — draw the shape on an overlay.
     overlay = Image.new("RGBA", im.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
+
+    arrow_tail: tuple[float, float] | None = None
+    arrow_tip: tuple[float, float] | None = None
 
     if style in ("circle", "ellipse"):
         _draw_ellipse(draw, x, y, width, height, resolved_color, stroke_width)
     elif style == "rectangle":
         _draw_rectangle(draw, x, y, width, height, resolved_color, stroke_width)
     elif style == "arrow":
-        tail, tip = _arrow_endpoints_for_bbox(x, y, width, height, im.size)
-        _draw_arrow(draw, tail, tip, resolved_color, stroke_width + 1)
+        # If the caller also supplied a label, extend the arrow so the label
+        # fits entirely past the tail — otherwise the label can clip into the
+        # shaft on near-the-edge targets.
+        min_arrow_len = 0
+        if label:
+            min_arrow_len = max(label_w, label_h) + 24
+        arrow_tail, arrow_tip = _arrow_endpoints_for_bbox(
+            x, y, width, height, im.size, min_length=min_arrow_len
+        )
+        _draw_arrow(draw, arrow_tail, arrow_tip, resolved_color, stroke_width + 1)
     elif style == "text":
         if not label:
             raise ValueError("style='text' requires a non-empty label")
@@ -449,24 +529,31 @@ def annotate_region(
 
     composed = Image.alpha_composite(im, overlay)
 
-    # Step 4 — optional text label. Drawn directly on the composed image so
+    # Step 5 — optional text label. Drawn directly on the composed image so
     # the label border and fill are the final rendered state.
     if label:
-        draw_tmp = ImageDraw.Draw(composed)
-        font = _load_font(16)
-        tw, th = _measure_text(draw_tmp, label, font)
-        label_w = tw + 16
-        label_h = th + 16
-        anchor = _choose_label_anchor(
-            x, y, width, height, label_w, label_h, composed.size, label_position
-        )
+        if (
+            style == "arrow"
+            and arrow_tail is not None
+            and arrow_tip is not None
+            and label_position == "auto"
+        ):
+            # Anchor the label to the arrow's tail so the reader's eye goes
+            # "text → arrow → target" and the label never covers the shaft.
+            anchor = _label_anchor_at_arrow_tail(
+                arrow_tail, arrow_tip, label_w, label_h, composed.size
+            )
+        else:
+            anchor = _choose_label_anchor(
+                x, y, width, height, label_w, label_h, composed.size, label_position
+            )
         _draw_text_box(
             composed,
             label,
             anchor,
             border_color=resolved_color,
-            font_size=16,
-            padding=8,
+            font_size=label_font_size,
+            padding=label_padding,
         )
 
     buf = io.BytesIO()
