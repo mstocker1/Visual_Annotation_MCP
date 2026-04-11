@@ -49,6 +49,17 @@ Action-specific required fields:
 - action is required and must be supported.
 - Required action fields must be present and non-empty when string typed.
 
+Optional step-level flow controls (Sprint 3):
+
+- store_as: non-empty string key to store step result in context.
+- if_var: non-empty context key for conditional execution.
+  - equals: optional comparison value when if_var is present.
+- retry: object
+  - max_attempts: integer >= 1
+  - backoff_ms: integer >= 0
+- on_error: one of fail, skip, fallback_action
+  - fallback_action: required action object when on_error is fallback_action
+
 ## Output Envelope
 
 Success:

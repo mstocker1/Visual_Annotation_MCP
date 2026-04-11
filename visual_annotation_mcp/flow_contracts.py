@@ -122,6 +122,72 @@ def _validate_action_specific(index: int, action: str, step: dict[str, Any]) -> 
                 ),
             )
 
+    retry = step.get("retry")
+    if retry is not None:
+        if not isinstance(retry, dict):
+            raise MCPToolError(
+                code=ErrorCode.INVALID_STEP,
+                message=f"Step {index} field 'retry' must be an object.",
+            )
+        if "max_attempts" in retry:
+            try:
+                max_attempts = int(retry.get("max_attempts"))
+            except Exception as exc:
+                raise MCPToolError(
+                    code=ErrorCode.INVALID_STEP,
+                    message=f"Step {index} retry.max_attempts must be an integer.",
+                ) from exc
+            if max_attempts < 1:
+                raise MCPToolError(
+                    code=ErrorCode.INVALID_STEP,
+                    message=f"Step {index} retry.max_attempts must be >= 1.",
+                )
+        if "backoff_ms" in retry:
+            try:
+                backoff_ms = int(retry.get("backoff_ms"))
+            except Exception as exc:
+                raise MCPToolError(
+                    code=ErrorCode.INVALID_STEP,
+                    message=f"Step {index} retry.backoff_ms must be an integer.",
+                ) from exc
+            if backoff_ms < 0:
+                raise MCPToolError(
+                    code=ErrorCode.INVALID_STEP,
+                    message=f"Step {index} retry.backoff_ms must be >= 0.",
+                )
+
+    if "if_var" in step and _is_missing(step.get("if_var")):
+        raise MCPToolError(
+            code=ErrorCode.INVALID_STEP,
+            message=f"Step {index} field 'if_var' must be a non-empty string.",
+        )
+
+    if "store_as" in step and _is_missing(step.get("store_as")):
+        raise MCPToolError(
+            code=ErrorCode.INVALID_STEP,
+            message=f"Step {index} field 'store_as' must be a non-empty string.",
+        )
+
+    on_error = step.get("on_error")
+    if on_error is not None:
+        mode = str(on_error).strip().lower()
+        if mode not in {"fail", "skip", "fallback_action"}:
+            raise MCPToolError(
+                code=ErrorCode.INVALID_STEP,
+                message=(
+                    f"Step {index} on_error must be one of: fail, skip, fallback_action."
+                ),
+            )
+        if mode == "fallback_action":
+            fb = step.get("fallback_action")
+            if not isinstance(fb, dict) or _is_missing(fb.get("action")):
+                raise MCPToolError(
+                    code=ErrorCode.INVALID_STEP,
+                    message=(
+                        f"Step {index} on_error=fallback_action requires a fallback_action object with action."
+                    ),
+                )
+
 
 def _is_missing(value: Any) -> bool:
     if value is None:

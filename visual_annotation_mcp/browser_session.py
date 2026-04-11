@@ -14,6 +14,7 @@ from visual_annotation_mcp.annotate import (
     LabelPosition,
     annotate_region,
 )
+from visual_annotation_mcp.flow_executor import FlowExecutor
 from visual_annotation_mcp.security import assert_url_allowed
 
 INTERACTIVE_SELECTOR = (
@@ -809,224 +810,215 @@ class BrowserSession:
             pass
         return f"URL matched {url_contains!r}: {self.page.url!r}."
 
+    async def _execute_flow_action(self, action: str, step: dict[str, Any]) -> dict[str, Any]:
+        if action == "navigate":
+            out = await self.navigate(
+                url=str(step.get("url") or ""),
+                wait_until=str(step.get("wait_until") or "load"),
+            )
+            return {"message": out}
+        if action == "inspect_elements":
+            raw = await self.inspect_elements(wait_timeout_ms=int(step.get("wait_timeout_ms", 5_000)))
+            parsed = json.loads(raw)
+            return {"count": int(parsed.get("count", 0))}
+        if action == "click_element":
+            out = await self.click_element(
+                element_id=str(step.get("element_id") or ""),
+                wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
+                post_wait_ms=int(step.get("post_wait_ms", 250)),
+                button=str(step.get("button") or "left"),
+            )
+            return {"message": out}
+        if action == "click_by_selector":
+            out = await self.click_by_selector(
+                selector=str(step.get("selector") or ""),
+                wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
+                post_wait_ms=int(step.get("post_wait_ms", 250)),
+                button=str(step.get("button") or "left"),
+            )
+            return {"message": out}
+        if action == "click_by_role":
+            out = await self.click_by_role(
+                role=str(step.get("role") or ""),
+                name=str(step.get("name") or ""),
+                wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
+                post_wait_ms=int(step.get("post_wait_ms", 250)),
+                exact=bool(step.get("exact", False)),
+            )
+            return {"message": out}
+        if action == "fill_element":
+            out = await self.fill_element(
+                element_id=str(step.get("element_id") or ""),
+                text=str(step.get("text") or ""),
+                wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
+                clear_first=bool(step.get("clear_first", True)),
+            )
+            return {"message": out}
+        if action == "fill_by_label":
+            out = await self.fill_by_label(
+                label=str(step.get("label") or ""),
+                text=str(step.get("text") or ""),
+                wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
+                clear_first=bool(step.get("clear_first", True)),
+                exact=bool(step.get("exact", False)),
+            )
+            return {"message": out}
+        if action == "click_by_text":
+            out = await self.click_by_text(
+                text=str(step.get("text") or ""),
+                wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
+                post_wait_ms=int(step.get("post_wait_ms", 250)),
+                exact=bool(step.get("exact", False)),
+                case_sensitive=bool(step.get("case_sensitive", False)),
+            )
+            return {"message": out}
+        if action == "fill_by_selector":
+            out = await self.fill_by_selector(
+                selector=str(step.get("selector") or ""),
+                text=str(step.get("text") or ""),
+                wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
+                clear_first=bool(step.get("clear_first", True)),
+            )
+            return {"message": out}
+        if action == "dismiss_common_popups":
+            out = await self.dismiss_common_popups(
+                wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
+                max_clicks=int(step.get("max_clicks", 3)),
+            )
+            return {"message": out}
+        if action == "detect_blockers":
+            out = await self.detect_blockers(
+                max_candidates=int(step.get("max_candidates", 8)),
+                min_area_ratio=float(step.get("min_area_ratio", 0.08)),
+            )
+            return {"count": int(json.loads(out).get("count", 0))}
+        if action == "dismiss_overlay":
+            out = await self.dismiss_overlay(
+                selector=(None if step.get("selector") is None else str(step.get("selector"))),
+                strategy=str(step.get("strategy") or "auto"),
+                wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
+            )
+            return {"message": out}
+        if action == "close_cookie_banner":
+            out = await self.close_cookie_banner(
+                wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
+            )
+            return {"message": out}
+        if action == "wait_for_selector":
+            out = await self.wait_for_selector(
+                selector=str(step.get("selector") or ""),
+                timeout_ms=int(step.get("timeout_ms", 10_000)),
+                state=str(step.get("state") or "visible"),
+            )
+            return {"message": out}
+        if action == "wait_for_text":
+            selector = step.get("selector")
+            out = await self.wait_for_text(
+                text=str(step.get("text") or ""),
+                timeout_ms=int(step.get("timeout_ms", 10_000)),
+                exact=bool(step.get("exact", False)),
+                selector=(None if selector is None else str(selector)),
+            )
+            return {"message": out}
+        if action == "select_option":
+            out = await self.select_option(
+                selector=(None if step.get("selector") is None else str(step.get("selector"))),
+                element_id=(None if step.get("element_id") is None else str(step.get("element_id"))),
+                value=(None if step.get("value") is None else str(step.get("value"))),
+                label=(None if step.get("label") is None else str(step.get("label"))),
+                index=(None if step.get("index") is None else self._coerce_int(step.get("index"), field="index")),
+                wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
+            )
+            return {"message": out}
+        if action == "check_uncheck":
+            out = await self.check_uncheck(
+                checked=bool(step.get("checked", True)),
+                selector=(None if step.get("selector") is None else str(step.get("selector"))),
+                element_id=(None if step.get("element_id") is None else str(step.get("element_id"))),
+                wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
+            )
+            return {"message": out}
+        if action == "submit_form":
+            out = await self.submit_form(
+                selector=(None if step.get("selector") is None else str(step.get("selector"))),
+                element_id=(None if step.get("element_id") is None else str(step.get("element_id"))),
+                wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
+                post_wait_ms=int(step.get("post_wait_ms", 250)),
+            )
+            return {"message": out}
+        if action == "upload_file":
+            out = await self.upload_file(
+                file_path=str(step.get("file_path") or ""),
+                selector=(None if step.get("selector") is None else str(step.get("selector"))),
+                element_id=(None if step.get("element_id") is None else str(step.get("element_id"))),
+                wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
+            )
+            return {"message": out}
+        if action == "press_key":
+            out = await self.press_key(
+                key=str(step.get("key") or ""),
+                delay_ms=int(step.get("delay_ms", 0)),
+            )
+            return {"message": out}
+        if action == "wait_for_url":
+            out = await self.wait_for_url(
+                url_contains=str(step.get("url_contains") or ""),
+                timeout_ms=int(step.get("timeout_ms", 10_000)),
+                wait_until=str(step.get("wait_until") or "load"),
+            )
+            return {"message": out}
+        if action == "screenshot_viewport":
+            await self.screenshot_viewport(full_page=bool(step.get("full_page", False)))
+            return {"message": "Captured viewport PNG."}
+        if action == "screenshot_element":
+            await self.screenshot_element(
+                element_id=str(step.get("element_id") or ""),
+                wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
+            )
+            return {"message": "Captured element PNG."}
+        if action == "highlight_element":
+            await self.highlight_element(
+                element_id=str(step.get("element_id") or ""),
+                padding=int(step.get("padding", 16)),
+                style=str(step.get("style") or "circle"),
+                min_context=int(step.get("min_context", 6)),
+                wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
+                color=str(step.get("color") or "auto"),
+                prefer_color=str(step.get("prefer_color") or "red"),
+                min_contrast=float(step.get("min_contrast", 140.0)),
+                label=(None if step.get("label") is None else str(step.get("label"))),
+                label_position=str(step.get("label_position") or "auto"),
+                blur_background=bool(step.get("blur_background", False)),
+                stroke_width=int(step.get("stroke_width", 4)),
+            )
+            return {"message": "Captured highlighted PNG."}
+        raise ValueError(f"Unsupported flow action: {action!r}")
+
     async def run_flow(self, steps: list[dict[str, Any]]) -> str:
         if not isinstance(steps, list) or not steps:
             raise ValueError("steps must be a non-empty list")
 
-        results: list[dict[str, Any]] = []
-
-        for idx, step in enumerate(steps, start=1):
-            if not isinstance(step, dict):
-                raise ValueError(f"Step {idx} must be an object")
-            action = str(step.get("action") or "").strip().lower()
-            if not action:
-                raise ValueError(f"Step {idx} is missing 'action'")
-
-            if action == "navigate":
-                out = await self.navigate(
-                    url=str(step.get("url") or ""),
-                    wait_until=str(step.get("wait_until") or "load"),
-                )
-                results.append({"step": idx, "action": action, "message": out})
-            elif action == "inspect_elements":
-                raw = await self.inspect_elements(wait_timeout_ms=int(step.get("wait_timeout_ms", 5_000)))
-                parsed = json.loads(raw)
-                results.append(
-                    {
-                        "step": idx,
-                        "action": action,
-                        "count": int(parsed.get("count", 0)),
-                    }
-                )
-            elif action == "click_element":
-                out = await self.click_element(
-                    element_id=str(step.get("element_id") or ""),
-                    wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
-                    post_wait_ms=int(step.get("post_wait_ms", 250)),
-                    button=str(step.get("button") or "left"),
-                )
-                results.append({"step": idx, "action": action, "message": out})
-            elif action == "click_by_selector":
-                out = await self.click_by_selector(
-                    selector=str(step.get("selector") or ""),
-                    wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
-                    post_wait_ms=int(step.get("post_wait_ms", 250)),
-                    button=str(step.get("button") or "left"),
-                )
-                results.append({"step": idx, "action": action, "message": out})
-            elif action == "click_by_role":
-                out = await self.click_by_role(
-                    role=str(step.get("role") or ""),
-                    name=str(step.get("name") or ""),
-                    wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
-                    post_wait_ms=int(step.get("post_wait_ms", 250)),
-                    exact=bool(step.get("exact", False)),
-                )
-                results.append({"step": idx, "action": action, "message": out})
-            elif action == "fill_element":
-                out = await self.fill_element(
-                    element_id=str(step.get("element_id") or ""),
-                    text=str(step.get("text") or ""),
-                    wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
-                    clear_first=bool(step.get("clear_first", True)),
-                )
-                results.append({"step": idx, "action": action, "message": out})
-            elif action == "fill_by_label":
-                out = await self.fill_by_label(
-                    label=str(step.get("label") or ""),
-                    text=str(step.get("text") or ""),
-                    wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
-                    clear_first=bool(step.get("clear_first", True)),
-                    exact=bool(step.get("exact", False)),
-                )
-                results.append({"step": idx, "action": action, "message": out})
-            elif action == "click_by_text":
-                out = await self.click_by_text(
-                    text=str(step.get("text") or ""),
-                    wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
-                    post_wait_ms=int(step.get("post_wait_ms", 250)),
-                    exact=bool(step.get("exact", False)),
-                    case_sensitive=bool(step.get("case_sensitive", False)),
-                )
-                results.append({"step": idx, "action": action, "message": out})
-            elif action == "fill_by_selector":
-                out = await self.fill_by_selector(
-                    selector=str(step.get("selector") or ""),
-                    text=str(step.get("text") or ""),
-                    wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
-                    clear_first=bool(step.get("clear_first", True)),
-                )
-                results.append({"step": idx, "action": action, "message": out})
-            elif action == "dismiss_common_popups":
-                out = await self.dismiss_common_popups(
-                    wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
-                    max_clicks=int(step.get("max_clicks", 3)),
-                )
-                results.append({"step": idx, "action": action, "message": out})
-            elif action == "detect_blockers":
-                out = await self.detect_blockers(
-                    max_candidates=int(step.get("max_candidates", 8)),
-                    min_area_ratio=float(step.get("min_area_ratio", 0.08)),
-                )
-                results.append(
-                    {
-                        "step": idx,
-                        "action": action,
-                        "count": int(json.loads(out).get("count", 0)),
-                    }
-                )
-            elif action == "dismiss_overlay":
-                out = await self.dismiss_overlay(
-                    selector=(None if step.get("selector") is None else str(step.get("selector"))),
-                    strategy=str(step.get("strategy") or "auto"),
-                    wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
-                )
-                results.append({"step": idx, "action": action, "message": out})
-            elif action == "close_cookie_banner":
-                out = await self.close_cookie_banner(
-                    wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
-                )
-                results.append({"step": idx, "action": action, "message": out})
-            elif action == "wait_for_selector":
-                out = await self.wait_for_selector(
-                    selector=str(step.get("selector") or ""),
-                    timeout_ms=int(step.get("timeout_ms", 10_000)),
-                    state=str(step.get("state") or "visible"),
-                )
-                results.append({"step": idx, "action": action, "message": out})
-            elif action == "wait_for_text":
-                selector = step.get("selector")
-                out = await self.wait_for_text(
-                    text=str(step.get("text") or ""),
-                    timeout_ms=int(step.get("timeout_ms", 10_000)),
-                    exact=bool(step.get("exact", False)),
-                    selector=(None if selector is None else str(selector)),
-                )
-                results.append({"step": idx, "action": action, "message": out})
-            elif action == "select_option":
-                out = await self.select_option(
-                    selector=(None if step.get("selector") is None else str(step.get("selector"))),
-                    element_id=(None if step.get("element_id") is None else str(step.get("element_id"))),
-                    value=(None if step.get("value") is None else str(step.get("value"))),
-                    label=(None if step.get("label") is None else str(step.get("label"))),
-                    index=(None if step.get("index") is None else self._coerce_int(step.get("index"), field="index")),
-                    wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
-                )
-                results.append({"step": idx, "action": action, "message": out})
-            elif action == "check_uncheck":
-                out = await self.check_uncheck(
-                    checked=bool(step.get("checked", True)),
-                    selector=(None if step.get("selector") is None else str(step.get("selector"))),
-                    element_id=(None if step.get("element_id") is None else str(step.get("element_id"))),
-                    wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
-                )
-                results.append({"step": idx, "action": action, "message": out})
-            elif action == "submit_form":
-                out = await self.submit_form(
-                    selector=(None if step.get("selector") is None else str(step.get("selector"))),
-                    element_id=(None if step.get("element_id") is None else str(step.get("element_id"))),
-                    wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
-                    post_wait_ms=int(step.get("post_wait_ms", 250)),
-                )
-                results.append({"step": idx, "action": action, "message": out})
-            elif action == "upload_file":
-                out = await self.upload_file(
-                    file_path=str(step.get("file_path") or ""),
-                    selector=(None if step.get("selector") is None else str(step.get("selector"))),
-                    element_id=(None if step.get("element_id") is None else str(step.get("element_id"))),
-                    wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
-                )
-                results.append({"step": idx, "action": action, "message": out})
-            elif action == "press_key":
-                out = await self.press_key(
-                    key=str(step.get("key") or ""),
-                    delay_ms=int(step.get("delay_ms", 0)),
-                )
-                results.append({"step": idx, "action": action, "message": out})
-            elif action == "wait_for_url":
-                out = await self.wait_for_url(
-                    url_contains=str(step.get("url_contains") or ""),
-                    timeout_ms=int(step.get("timeout_ms", 10_000)),
-                    wait_until=str(step.get("wait_until") or "load"),
-                )
-                results.append({"step": idx, "action": action, "message": out})
-            elif action == "screenshot_viewport":
-                await self.screenshot_viewport(full_page=bool(step.get("full_page", False)))
-                results.append({"step": idx, "action": action, "message": "Captured viewport PNG."})
-            elif action == "screenshot_element":
-                await self.screenshot_element(
-                    element_id=str(step.get("element_id") or ""),
-                    wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
-                )
-                results.append({"step": idx, "action": action, "message": "Captured element PNG."})
-            elif action == "highlight_element":
-                await self.highlight_element(
-                    element_id=str(step.get("element_id") or ""),
-                    padding=int(step.get("padding", 16)),
-                    style=str(step.get("style") or "circle"),
-                    min_context=int(step.get("min_context", 6)),
-                    wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
-                    color=str(step.get("color") or "auto"),
-                    prefer_color=str(step.get("prefer_color") or "red"),
-                    min_contrast=float(step.get("min_contrast", 140.0)),
-                    label=(None if step.get("label") is None else str(step.get("label"))),
-                    label_position=str(step.get("label_position") or "auto"),
-                    blur_background=bool(step.get("blur_background", False)),
-                    stroke_width=int(step.get("stroke_width", 4)),
-                )
-                results.append({"step": idx, "action": action, "message": "Captured highlighted PNG."})
-            else:
-                raise ValueError(f"Unsupported flow action at step {idx}: {action!r}")
-
-        return json.dumps(
-            {
-                "ok": True,
-                "steps_executed": len(results),
-                "final_url": self.page.url,
-                "results": results,
-            },
-            indent=2,
-        )
+        executor = FlowExecutor()
+        try:
+            out = await executor.run(
+                steps=steps,
+                execute_action=self._execute_flow_action,
+                final_url_getter=lambda: self.page.url,
+            )
+            return json.dumps(out, indent=2)
+        except Exception as exc:
+            return json.dumps(
+                {
+                    "ok": False,
+                    "steps_executed": 0,
+                    "final_url": self.page.url,
+                    "error": {
+                        "error_code": "execution_error",
+                        "message": str(exc),
+                    },
+                },
+                indent=2,
+            )
 
     async def screenshot_element(self, element_id: str, wait_timeout_ms: int = 8_000) -> bytes:
         handle = self._get_handle(element_id)

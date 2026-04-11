@@ -393,6 +393,34 @@ async def main() -> None:
         assert flow_result2["ok"] is True
         assert flow_result2["steps_executed"] == 5
 
+        # 16. Sprint 3 flow controls: retry, skip, store_as, conditional run.
+        await session.navigate(form_url)
+        flow_result3 = json.loads(
+            await session.run_flow(
+                [
+                    {"action": "detect_blockers", "store_as": "blk"},
+                    {
+                        "action": "wait_for_text",
+                        "text": "Profile Form",
+                        "if_var": "blk",
+                        "equals": {"count": 0},
+                    },
+                    {
+                        "action": "wait_for_text",
+                        "text": "THIS_WONT_EXIST",
+                        "timeout_ms": 50,
+                        "retry": {"max_attempts": 2, "backoff_ms": 0},
+                        "on_error": "skip",
+                    },
+                    {"action": "wait_for_text", "text": "Profile Form"},
+                ]
+            )
+        )
+        assert flow_result3["ok"] is True
+        assert flow_result3["steps_executed"] == 4
+        assert "blk" in flow_result3.get("context", {})
+        assert any(r.get("status") == "skipped" for r in flow_result3["results"])
+
         print("smoke_test: OK")
         print(
             f"  elements={report['count']} "

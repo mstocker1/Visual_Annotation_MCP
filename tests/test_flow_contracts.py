@@ -90,6 +90,21 @@ class FlowContractsTests(unittest.TestCase):
             parse_flow_json('[{"action":"upload_file","file_path":"C:/tmp/a.txt"}]')
         self.assertEqual(ctx.exception.code, ErrorCode.INVALID_STEP)
 
+    def test_parse_flow_json_rejects_invalid_retry(self) -> None:
+        with self.assertRaises(MCPToolError) as ctx:
+            parse_flow_json('[{"action":"wait_for_text","text":"ok","retry":{"max_attempts":0}}]')
+        self.assertEqual(ctx.exception.code, ErrorCode.INVALID_STEP)
+
+    def test_parse_flow_json_rejects_invalid_on_error(self) -> None:
+        with self.assertRaises(MCPToolError) as ctx:
+            parse_flow_json('[{"action":"wait_for_text","text":"ok","on_error":"later"}]')
+        self.assertEqual(ctx.exception.code, ErrorCode.INVALID_STEP)
+
+    def test_parse_flow_json_rejects_missing_fallback_action(self) -> None:
+        with self.assertRaises(MCPToolError) as ctx:
+            parse_flow_json('[{"action":"wait_for_text","text":"ok","on_error":"fallback_action"}]')
+        self.assertEqual(ctx.exception.code, ErrorCode.INVALID_STEP)
+
 
 if __name__ == "__main__":
     unittest.main()

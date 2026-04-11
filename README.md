@@ -321,6 +321,14 @@ multi-shape diagram with repeated invocations.
 Execute a multi-step flow in one call. `flow_json` is a JSON array where each
 step includes an `action` and action-specific fields.
 
+Optional per-step flow controls:
+- `store_as`: save step result in flow context
+- `if_var`: run step only if a context key is truthy
+- `equals`: optional value check used with `if_var`
+- `retry`: `{ "max_attempts": int>=1, "backoff_ms": int>=0 }`
+- `on_error`: `"fail" | "skip" | "fallback_action"`
+- `fallback_action`: action object used when `on_error="fallback_action"`
+
 Supported actions:
 - `navigate`
 - `inspect_elements`
