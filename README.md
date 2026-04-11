@@ -22,16 +22,24 @@ navigate  →  inspect_elements  →  highlight_element  →  (annotate_last_ima
 ```
 
 1. **`navigate`** — open a URL in a headless Chromium.
-2. **`inspect_elements`** — return JSON for every visible link, button, and
-   similar control with a stable id (`e0`, `e1`, ...), its text/aria label,
-   href, and CSS bounding box.
-3. **`highlight_element`** — screenshot a region around an element by id and
+2. **`inspect_elements`** — return JSON for visible interactive and form
+  elements (links, buttons, input/textarea/select, etc.) with stable ids
+  (`e0`, `e1`, ...), text/aria metadata, DOM metadata, coverage status,
+  and CSS bounding boxes.
+3. **`click_element` / `fill_element` / `press_key` / `wait_for_url`** —
+  interact with the page to dismiss blockers, fill fields, and move between
+  steps.
+4. **Convenience tools** — **`click_by_text`**, **`fill_by_selector`**, and
+  **`dismiss_common_popups`** for quick interaction without a prior element id.
+5. **`highlight_element`** — screenshot a region around an element by id and
    draw an annotation on it. The crop is automatically expanded to include a
    few nearby interactive elements so the viewer has visual context.
-4. **`screenshot_viewport`** / **`screenshot_element`** — raw screenshots with
+6. **`screenshot_viewport`** / **`screenshot_element`** — raw screenshots with
    no annotation.
-5. **`annotate_last_image`** — draw additional shapes/labels on the image
+7. **`annotate_last_image`** — draw additional shapes/labels on the image
    produced by the previous tool call, so annotations can be stacked.
+8. **`run_flow`** — run a JSON list of steps for repeatable multi-step
+  journeys (for example: signup, onboarding, checkout).
 
 All shape drawing, color resolution, and image effects live in
 `visual_annotation_mcp/annotate.py` and can be used as a normal Python library
@@ -90,6 +98,15 @@ right → left), or pinned to any side.
 `blur_background=True` applies a feathered Gaussian blur to everything
 outside the target's bounding box, leaving the element sharp. Good for
 "which button is X" style screenshots where the rest of the page is noisy.
+
+## Delivery roadmap
+
+- Sprint execution plan: `docs/SPRINT_EXECUTION_PLAN.md`
+- Ticket backlog: `docs/sprints/BACKLOG.md`
+- Acceptance matrix: `docs/sprints/ACCEPTANCE_MATRIX.md`
+- Risks and release gates: `docs/sprints/RISKS_AND_GATES.md`
+- Swarm planning notes: `docs/sprints/SWARM_NOTES.md`
+- Flow v2 contract: `docs/sprints/FLOW_V2_CONTRACT.md`
 
 ## Installation
 
@@ -189,18 +206,91 @@ data URL. It exits non-zero on any assertion failure.
 ### `navigate(url, wait_until="load")`
 Go to a URL (HTTP/S only). Clears element ids from any previous `inspect_elements`.
 
-### `inspect_elements()`
+### `inspect_elements(wait_timeout_ms=5000)`
 Return JSON with every visible link, button, `role="button"`, `role="link"`,
-`role="menuitem"`, and submit/reset/button input on the current page. Each
-entry has `id`, `tag`, `text`, `aria_label`, `role`, `href`, and `box_css`
-(`x`, `y`, `width`, `height` in CSS pixels).
+`role="menuitem"`, input/textarea/select controls, and contenteditable
+elements on the current page. Each entry has `id`, `tag`, `text`,
+`aria_label`, `role`, `href`, `dom_id`, `name`, `placeholder`,
+`is_covered`, and `box_css` (`x`, `y`, `width`, `height` in CSS pixels).
+
+`wait_timeout_ms` lets dynamic pages finish rendering controls before the
+snapshot is taken.
 
 ### `screenshot_viewport(full_page=False)`
 Capture the current viewport (or the full scrolling page when `full_page=True`)
 as a PNG.
 
-### `screenshot_element(element_id)`
+### `screenshot_element(element_id, wait_timeout_ms=8000)`
 Tight PNG screenshot of a single DOM element by id.
+
+Before capture, the element is waited until actionable: visible, stable,
+scrolled into view, and not center-covered by another element.
+
+### `click_element(element_id, wait_timeout_ms=8000, post_wait_ms=250, button="left")`
+Click an element id from `inspect_elements`. Before clicking, the target is
+waited until actionable (visible, stable, scrolled into view, not covered at
+its center point).
+
+### `click_by_selector(selector, wait_timeout_ms=8000, post_wait_ms=250, button="left")`
+Click the first actionable element matched by a CSS selector.
+
+### `click_by_role(role, name="", wait_timeout_ms=8000, post_wait_ms=250, exact=False)`
+Click the first actionable element matched by accessible role and optional
+accessible name.
+
+### `fill_element(element_id, text, wait_timeout_ms=8000, clear_first=True)`
+Fill a text-like control (input/textarea/contenteditable) by inspected id.
+
+### `fill_by_label(label, text, wait_timeout_ms=8000, clear_first=True, exact=False)`
+Fill a field using associated label text.
+
+### `click_by_text(text, wait_timeout_ms=8000, post_wait_ms=250, exact=False, case_sensitive=False)`
+Click the first actionable interactive element whose text, aria-label, value,
+or title matches the supplied string.
+
+### `fill_by_selector(selector, text, wait_timeout_ms=8000, clear_first=True)`
+Fill an input-like control selected by CSS selector without requiring an
+`inspect_elements` id.
+
+### `dismiss_common_popups(wait_timeout_ms=8000, max_clicks=3)`
+Best-effort modal/cookie dismiss helper. Tries common labels (`accept`,
+`agree`, `close`, `dismiss`, etc.) and close-icon selectors.
+
+### `detect_blockers(max_candidates=8, min_area_ratio=0.08)`
+Return JSON metadata for likely viewport blockers (modals/overlays), including
+z-index, area ratio, and CSS box coordinates.
+
+### `dismiss_overlay(selector=None, strategy="auto", wait_timeout_ms=8000)`
+Dismiss overlays by selector or automatic close strategies (`auto`, `esc`,
+`click`).
+
+### `close_cookie_banner(wait_timeout_ms=8000)`
+Best-effort helper to close cookie banners via common text labels and selectors.
+
+### `press_key(key, delay_ms=0)`
+Send a key press to the active page (`Enter`, `Escape`, `Tab`, etc.).
+
+### `wait_for_url(url_contains, timeout_ms=10000, wait_until="load")`
+Wait for URL transitions between flow steps, including hash changes.
+
+### `wait_for_selector(selector, timeout_ms=10000, state="visible")`
+Wait for a selector to reach `attached`, `detached`, `visible`, or `hidden`.
+
+### `wait_for_text(text, timeout_ms=10000, exact=False, selector=None)`
+Wait for text to become visible globally, or scoped under a selector.
+
+### `select_option(selector=None, element_id=None, value=None, label=None, index=None, wait_timeout_ms=8000)`
+Select option(s) in a `<select>` by value, label, or index using either
+selector or element id.
+
+### `check_uncheck(checked=True, selector=None, element_id=None, wait_timeout_ms=8000)`
+Check or uncheck a checkbox/radio using selector or element id.
+
+### `submit_form(selector=None, element_id=None, wait_timeout_ms=8000, post_wait_ms=250)`
+Submit a form target by form selector/id or via submit-capable control click.
+
+### `upload_file(file_path, selector=None, element_id=None, wait_timeout_ms=8000)`
+Upload a local file to a file input using selector or element id.
 
 ### `highlight_element(element_id, ...)`
 Screenshot a region around an element and draw an annotation on it.
@@ -211,6 +301,7 @@ Screenshot a region around an element and draw an annotation on it.
 | `padding`          | `16`      | Extra pixel margin around the computed crop.                                   |
 | `style`            | `"circle"`| `circle`, `ellipse`, `rectangle`, `arrow`, or `text`.                          |
 | `min_context`      | `6`       | Include at least this many nearby interactive elements in the crop.            |
+| `wait_timeout_ms`  | `8000`    | Max wait for actionable target (visible, stable, in-view, not covered).        |
 | `color`            | `"auto"`  | `"auto"` for preferred-with-fallback, or any CSS color to force.               |
 | `prefer_color`     | `"red"`   | Preferred color for auto mode; any CSS color.                                  |
 | `min_contrast`     | `140`     | RGB distance threshold before the auto picker falls back to the palette.      |
@@ -225,6 +316,49 @@ given pixel bounding box. Accepts all of the visual parameters above
 (`style`, `color`, `prefer_color`, `min_contrast`, `label`, `label_position`,
 `blur_background`, `stroke_width`). Calls stack, so you can build up a
 multi-shape diagram with repeated invocations.
+
+### `run_flow(flow_json)`
+Execute a multi-step flow in one call. `flow_json` is a JSON array where each
+step includes an `action` and action-specific fields.
+
+Supported actions:
+- `navigate`
+- `inspect_elements`
+- `click_element`
+- `click_by_selector`
+- `click_by_role`
+- `fill_element`
+- `fill_by_label`
+- `click_by_text`
+- `fill_by_selector`
+- `dismiss_common_popups`
+- `detect_blockers`
+- `dismiss_overlay`
+- `close_cookie_banner`
+- `wait_for_selector`
+- `wait_for_text`
+- `select_option`
+- `check_uncheck`
+- `submit_form`
+- `upload_file`
+- `press_key`
+- `wait_for_url`
+- `screenshot_viewport`
+- `screenshot_element`
+- `highlight_element`
+
+Example:
+
+```json
+[
+  {"action":"navigate","url":"https://example.com"},
+  {"action":"dismiss_common_popups"},
+  {"action":"fill_by_selector","selector":"input[name='email']","text":"qa@example.com"},
+  {"action":"click_by_text","text":"Continue"},
+  {"action":"wait_for_url","url_contains":"signup"},
+  {"action":"screenshot_viewport"}
+]
+```
 
 ## Optional URL allowlist
 
