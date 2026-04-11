@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 _VAR_PATTERN = re.compile(r"\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}")
@@ -13,8 +14,8 @@ class FlowExecutor:
     async def run(
         self,
         steps: list[dict[str, Any]],
-        execute_action: Any,
-        final_url_getter: Any,
+        execute_action: Callable[[str, dict[str, Any]], Awaitable[Any]],
+        final_url_getter: Callable[[], Any],
     ) -> dict[str, Any]:
         context: dict[str, Any] = {}
         results: list[dict[str, Any]] = []
@@ -27,7 +28,8 @@ class FlowExecutor:
                 results.append({"step": idx, "action": action, "status": "skipped", "reason": "condition"})
                 continue
 
-            retry_cfg = step.get("retry") if isinstance(step.get("retry"), dict) else {}
+            retry_cfg_raw = step.get("retry")
+            retry_cfg: dict[str, Any] = retry_cfg_raw if isinstance(retry_cfg_raw, dict) else {}
             max_attempts = max(1, int(retry_cfg.get("max_attempts", 1)))
             backoff_ms = max(0, int(retry_cfg.get("backoff_ms", 0)))
 
@@ -113,7 +115,10 @@ class FlowExecutor:
         return bool(current)
 
     def _render_step(self, step: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
-        return self._render_value(step, context)
+        rendered = self._render_value(step, context)
+        if not isinstance(rendered, dict):
+            return step
+        return rendered
 
     def _render_value(self, value: Any, context: dict[str, Any]) -> Any:
         if isinstance(value, dict):

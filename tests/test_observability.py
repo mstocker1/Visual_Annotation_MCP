@@ -3,7 +3,12 @@ from __future__ import annotations
 import json
 import unittest
 
-from visual_annotation_mcp.observability import metrics_snapshot, observe_async, redact_value, set_request_id
+from visual_annotation_mcp.observability import (
+    metrics_snapshot,
+    observe_async,
+    redact_value,
+    set_request_id,
+)
 
 
 class ObservabilityTests(unittest.IsolatedAsyncioTestCase):

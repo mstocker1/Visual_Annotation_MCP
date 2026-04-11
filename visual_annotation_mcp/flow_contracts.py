@@ -150,7 +150,7 @@ def _validate_action_specific(index: int, action: str, step: dict[str, Any]) -> 
             )
         if "max_attempts" in retry:
             try:
-                max_attempts = int(retry.get("max_attempts"))
+                max_attempts = int(retry.get("max_attempts", 1))
             except Exception as exc:
                 raise MCPToolError(
                     code=ErrorCode.INVALID_STEP,
@@ -163,7 +163,7 @@ def _validate_action_specific(index: int, action: str, step: dict[str, Any]) -> 
                 )
         if "backoff_ms" in retry:
             try:
-                backoff_ms = int(retry.get("backoff_ms"))
+                backoff_ms = int(retry.get("backoff_ms", 0))
             except Exception as exc:
                 raise MCPToolError(
                     code=ErrorCode.INVALID_STEP,

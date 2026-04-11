@@ -38,6 +38,15 @@ dependencies = [
   "pillow>=10.0.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+  "coverage[toml]>=7.6.0",
+  "mypy>=1.11.0",
+  "pip-audit>=2.8.0",
+  "pydocstyle>=6.3.0",
+  "ruff>=0.6.0",
+]
+
 [project.scripts]
 visual-annotation-mcp = "visual_annotation_mcp.server:main"
 visual-annotation-mcp-install-browsers = "visual_annotation_mcp.install:main"
@@ -71,3 +80,52 @@ include = [
   "/LICENSE",
   "/pyproject.toml",
 ]
+
+[tool.coverage.run]
+source = ["visual_annotation_mcp"]
+branch = true
+omit = [
+  "visual_annotation_mcp/__main__.py",
+  "visual_annotation_mcp/annotate.py",
+  "visual_annotation_mcp/browser_session.py",
+  "visual_annotation_mcp/install.py",
+  "visual_annotation_mcp/server.py",
+]
+
+[tool.coverage.report]
+fail_under = 55
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = false
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+no_implicit_optional = true
+check_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_subclassing_any = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+  "visual_annotation_mcp.annotate",
+  "visual_annotation_mcp.browser_session",
+  "visual_annotation_mcp.server",
+]
+ignore_errors = true
+
+[tool.pydocstyle]
+convention = "pep257"
+# Existing codebase has mixed docstring coverage; enforce quality where present.
+add-ignore = ["D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107", "D203", "D205", "D212", "D400"]

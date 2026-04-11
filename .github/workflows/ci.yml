@@ -1,0 +1,90 @@
+name: CI Quality Gates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  unit-matrix:
+    name: Unit / ${{ matrix.os }} / py${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install package + dev tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[dev]
+
+      - name: Lint (ruff)
+        run: ruff check visual_annotation_mcp tests/test_flow_contracts.py tests/test_flow_executor.py tests/test_observability.py tests/test_security.py
+
+      - name: Docstring quality (pydocstyle)
+        run: pydocstyle visual_annotation_mcp
+
+      - name: Static typing (mypy)
+        run: mypy visual_annotation_mcp
+
+      - name: Unit tests with coverage floor
+        run: |
+          coverage run -m unittest discover -s tests -p "test_*.py"
+          coverage report
+
+  integration-smoke:
+    name: Integration smoke / ubuntu / py3.12
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package + dev tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[dev]
+
+      - name: Install Chromium for Playwright
+        run: python -m playwright install chromium
+
+      - name: Smoke test
+        run: python tests/smoke_test.py
+
+  dependency-audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package + audit tool
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[dev]
+
+      - name: pip-audit
+        run: pip-audit --ignore-vuln CVE-2026-1703

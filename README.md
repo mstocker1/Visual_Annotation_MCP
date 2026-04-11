@@ -107,6 +107,8 @@ outside the target's bounding box, leaving the element sharp. Good for
 - Risks and release gates: `docs/sprints/RISKS_AND_GATES.md`
 - Swarm planning notes: `docs/sprints/SWARM_NOTES.md`
 - Flow v2 contract: `docs/sprints/FLOW_V2_CONTRACT.md`
+- Operations runbook: `docs/OPERATIONS.md`
+- Release notes and migration guidance: `docs/RELEASE_NOTES_AND_MIGRATION.md`
 
 ## Installation
 
