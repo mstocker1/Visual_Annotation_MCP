@@ -6,6 +6,7 @@ import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any, TypedDict
+from uuid import uuid4
 
 from mcp.server.fastmcp import Context, FastMCP, Image
 
@@ -13,6 +14,13 @@ from visual_annotation_mcp.annotate import HighlightStyle, LabelPosition
 from visual_annotation_mcp.browser_session import BrowserSession
 from visual_annotation_mcp.errors import ErrorCode, MCPToolError
 from visual_annotation_mcp.flow_contracts import parse_flow_json
+from visual_annotation_mcp.observability import (
+    clear_request_id,
+    log_event,
+    metrics_snapshot,
+    observe_async,
+    set_request_id,
+)
 
 
 class LifespanState(TypedDict):
@@ -56,6 +64,30 @@ def _error_envelope(action: str, err: Exception) -> str:
     return json.dumps({"ok": False, "action": action, "error": payload}, indent=2)
 
 
+async def _run_observed(
+    action: str,
+    runner: Any,
+    *,
+    metadata: dict[str, Any] | None = None,
+) -> Any:
+    request_id = set_request_id(uuid4().hex)
+    try:
+        log_event("info", "request_start", tool=action, metadata={"request_id": request_id, **(metadata or {})})
+        result = await observe_async(action, runner, metadata=metadata)
+        log_event("info", "request_end", tool=action, metadata={"request_id": request_id, "ok": True})
+        return result
+    except Exception as exc:
+        log_event(
+            "error",
+            "request_end",
+            tool=action,
+            metadata={"request_id": request_id, "ok": False, "error": str(exc)},
+        )
+        raise
+    finally:
+        clear_request_id()
+
+
 @mcp.tool()
 async def navigate(
     url: str,
@@ -63,7 +95,11 @@ async def navigate(
     wait_until: str = "load",
 ) -> str:
     """Go to a URL (HTTP/S). Clears element ids from a previous inspect."""
-    return await _browser(ctx).navigate(url, wait_until=wait_until)
+    return await _run_observed(
+        "navigate",
+        lambda: _browser(ctx).navigate(url, wait_until=wait_until),
+        metadata={"wait_until": wait_until},
+    )
 
 
 @mcp.tool()
@@ -76,7 +112,11 @@ async def inspect_elements(
     This call is content-aware: it can wait briefly for dynamic pages to render
     interactive controls before taking the snapshot.
     """
-    return await _browser(ctx).inspect_elements(wait_timeout_ms=wait_timeout_ms)
+    return await _run_observed(
+        "inspect_elements",
+        lambda: _browser(ctx).inspect_elements(wait_timeout_ms=wait_timeout_ms),
+        metadata={"wait_timeout_ms": wait_timeout_ms},
+    )
 
 
 @mcp.tool()
@@ -718,9 +758,20 @@ async def run_flow_v2(
     try:
         steps = parse_flow_json(flow_json)
         bs = _browser(ctx)
-        return await bs.run_flow(steps)
+        return await _run_observed(
+            "run_flow_v2",
+            lambda: bs.run_flow(steps),
+            metadata={"steps": len(steps)},
+        )
     except Exception as exc:
         return _error_envelope("run_flow_v2", exc)
+
+
+@mcp.tool()
+async def observability_snapshot(ctx: Context) -> str:
+    """Return in-memory per-tool latency/failure metrics snapshot as JSON."""
+    _ = ctx
+    return json.dumps({"ok": True, "metrics": metrics_snapshot()}, indent=2)
 
 
 def main() -> None:

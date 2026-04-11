@@ -400,6 +400,14 @@ Example:
 ]
 ```
 
+### `observability_snapshot()`
+Return in-memory per-tool metrics as JSON:
+
+- calls
+- failures
+- avg_ms
+- max_ms
+
 ## Optional URL allowlist
 
 Set `VISUAL_ANNOTATION_ALLOWED_HOSTS` in the MCP server's environment to
@@ -423,6 +431,33 @@ restrict which hosts can be navigated to:
 Comma-separated hostnames, no scheme. Any navigation to a host outside the
 list raises an error. Leave unset to allow all hosts.
 
+## Optional file path allowlist (uploads)
+
+Set `VISUAL_ANNOTATION_ALLOWED_PATHS` in the MCP server environment to
+restrict file uploads to approved roots:
+
+```json
+{
+  "mcpServers": {
+    "visual-annotation": {
+      "type": "stdio",
+      "command": "${VISUAL_ANNOTATION_PYTHON:-python}",
+      "args": ["-m", "visual_annotation_mcp"],
+      "env": {
+        "VISUAL_ANNOTATION_ALLOWED_PATHS": "C:/Users/me/Downloads,C:/work/safe-files"
+      }
+    }
+  }
+}
+```
+
+When set, `upload_file` rejects any path outside the configured roots.
+
+## Optional telemetry flag
+
+Set `VISUAL_ANNOTATION_TELEMETRY=1` to emit extra telemetry metric events in
+structured logs (off by default).
+
 ## Layout
 
 ```
@@ -444,7 +479,8 @@ Visual_Annotation_MCP/
     ├── annotate.py           # Shape primitives, blur, contrast picker
     ├── browser_session.py    # Playwright session wrapper
     ├── install.py            # visual-annotation-mcp-install-browsers
-    ├── security.py           # Optional host allowlist
+    ├── observability.py      # Structured logs + metrics + redaction
+    ├── security.py           # URL/file allowlist checks
     └── server.py             # FastMCP tool definitions
 ```
 

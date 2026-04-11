@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-from pathlib import Path
 from typing import Any
 
 from playwright.async_api import Browser, ElementHandle, Page, async_playwright
@@ -16,7 +15,8 @@ from visual_annotation_mcp.annotate import (
     annotate_region,
 )
 from visual_annotation_mcp.flow_executor import FlowExecutor
-from visual_annotation_mcp.security import assert_url_allowed
+from visual_annotation_mcp.observability import observe_async
+from visual_annotation_mcp.security import assert_file_path_allowed, assert_url_allowed
 
 INTERACTIVE_SELECTOR = (
     "a, button, [role='button'], [role='link'], [role='menuitem'], "
@@ -959,7 +959,7 @@ class BrowserSession:
         element_id: str | None = None,
         wait_timeout_ms: int = 8_000,
     ) -> str:
-        p = Path(file_path)
+        p = assert_file_path_allowed(file_path)
         if not p.exists() or not p.is_file():
             raise ValueError(f"file_path does not exist or is not a file: {file_path!r}")
 
@@ -1233,10 +1233,23 @@ class BrowserSession:
             raise ValueError("steps must be a non-empty list")
 
         executor = FlowExecutor()
+
+        async def _observed_execute(action: str, step: dict[str, Any]) -> dict[str, Any]:
+            safe_meta = {
+                "step_action": action,
+                "has_selector": bool(step.get("selector")),
+                "has_element_id": bool(step.get("element_id")),
+            }
+            return await observe_async(
+                f"flow.{action}",
+                lambda: self._execute_flow_action(action, step),
+                metadata=safe_meta,
+            )
+
         try:
             out = await executor.run(
                 steps=steps,
-                execute_action=self._execute_flow_action,
+                execute_action=_observed_execute,
                 final_url_getter=lambda: self.page.url,
             )
             return json.dumps(out, indent=2)
