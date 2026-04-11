@@ -31,6 +31,14 @@ Action-specific required fields:
 - close_cookie_banner: none
 - wait_for_selector: selector
 - wait_for_text: text
+- assert_element_exists: selector or element_id
+- assert_element_visible: selector or element_id
+- assert_text_contains: text
+- assert_url_matches: pattern
+- extract_element: selector or element_id
+- extract_form_data: none (selector optional)
+- extract_table: selector
+- extract_page_model: none
 - select_option: selector or element_id, and one of value/label/index
 - check_uncheck: selector or element_id
 - submit_form: selector or element_id

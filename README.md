@@ -279,6 +279,30 @@ Wait for a selector to reach `attached`, `detached`, `visible`, or `hidden`.
 ### `wait_for_text(text, timeout_ms=10000, exact=False, selector=None)`
 Wait for text to become visible globally, or scoped under a selector.
 
+### `assert_element_exists(selector=None, element_id=None)`
+Assert that an element exists (selector or inspected id required).
+
+### `assert_element_visible(selector=None, element_id=None, wait_timeout_ms=8000)`
+Assert that an element is visible/actionable.
+
+### `assert_text_contains(text, selector=None, case_sensitive=False)`
+Assert that given text exists on page or within selector scope.
+
+### `assert_url_matches(pattern, regex=False)`
+Assert that current URL contains a pattern or matches regex.
+
+### `extract_element(selector=None, element_id=None, attributes=None, include_text=True)`
+Extract one element's structural data (tag/id/role/text/attrs/bbox).
+
+### `extract_form_data(selector="form")`
+Extract key/value data from form fields inside a form selector.
+
+### `extract_table(selector)`
+Extract table headers and row objects from a table selector.
+
+### `extract_page_model()`
+Extract lightweight page model: headings, landmarks, forms, interactive count.
+
 ### `select_option(selector=None, element_id=None, value=None, label=None, index=None, wait_timeout_ms=8000)`
 Select option(s) in a `<select>` by value, label, or index using either
 selector or element id.
@@ -345,6 +369,14 @@ Supported actions:
 - `close_cookie_banner`
 - `wait_for_selector`
 - `wait_for_text`
+- `assert_element_exists`
+- `assert_element_visible`
+- `assert_text_contains`
+- `assert_url_matches`
+- `extract_element`
+- `extract_form_data`
+- `extract_table`
+- `extract_page_model`
 - `select_option`
 - `check_uncheck`
 - `submit_form`

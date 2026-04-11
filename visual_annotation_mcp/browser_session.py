@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -482,6 +483,195 @@ class BrowserSession:
         scope = f" within selector {selector!r}" if selector and selector.strip() else ""
         return f"Text {needle!r} is visible{scope}."
 
+    async def assert_element_exists(
+        self,
+        selector: str | None = None,
+        element_id: str | None = None,
+    ) -> str:
+        _ = await self._resolve_target_handle(selector=selector, element_id=element_id)
+        target = selector if selector and selector.strip() else element_id
+        return f"Assertion passed: element exists for target {target!r}."
+
+    async def assert_element_visible(
+        self,
+        selector: str | None = None,
+        element_id: str | None = None,
+        wait_timeout_ms: int = 8_000,
+    ) -> str:
+        h = await self._resolve_target_handle(selector=selector, element_id=element_id)
+        await self._ensure_actionable_element(h, timeout_ms=wait_timeout_ms)
+        target = selector if selector and selector.strip() else element_id
+        return f"Assertion passed: element is visible/actionable for target {target!r}."
+
+    async def assert_text_contains(
+        self,
+        text: str,
+        selector: str | None = None,
+        case_sensitive: bool = False,
+    ) -> str:
+        needle = text.strip()
+        if not needle:
+            raise ValueError("text is required")
+        if selector and selector.strip():
+            haystack = await self.page.locator(selector).first.inner_text()
+        else:
+            haystack = await self.page.inner_text("body")
+        left = haystack if case_sensitive else haystack.lower()
+        right = needle if case_sensitive else needle.lower()
+        if right not in left:
+            raise ValueError(f"Assertion failed: text {needle!r} was not found")
+        return f"Assertion passed: text {needle!r} found."
+
+    async def assert_url_matches(
+        self,
+        pattern: str,
+        regex: bool = False,
+    ) -> str:
+        needle = pattern.strip()
+        if not needle:
+            raise ValueError("pattern is required")
+        current = self.page.url
+        if regex:
+            if re.search(needle, current) is None:
+                raise ValueError(f"Assertion failed: URL {current!r} does not match regex {needle!r}")
+        else:
+            if needle not in current:
+                raise ValueError(f"Assertion failed: URL {current!r} does not contain {needle!r}")
+        return f"Assertion passed: URL matched {needle!r}."
+
+    async def extract_element(
+        self,
+        selector: str | None = None,
+        element_id: str | None = None,
+        attributes: list[str] | None = None,
+        include_text: bool = True,
+    ) -> str:
+        h = await self._resolve_target_handle(selector=selector, element_id=element_id)
+        attrs = attributes or []
+        data = await h.evaluate(
+            """
+            (el, { attrs, includeText }) => {
+              const out = {
+                tag: (el.tagName || '').toLowerCase(),
+                id: el.id || '',
+                role: el.getAttribute('role') || '',
+              };
+              if (includeText) out.text = (el.innerText || '').trim();
+              if (attrs.length) {
+                out.attributes = {};
+                for (const name of attrs) out.attributes[name] = el.getAttribute(name) || '';
+              }
+              const r = el.getBoundingClientRect();
+              out.box_css = {
+                x: Number(r.left.toFixed(2)),
+                y: Number(r.top.toFixed(2)),
+                width: Number(r.width.toFixed(2)),
+                height: Number(r.height.toFixed(2)),
+              };
+              return out;
+            }
+            """,
+            {"attrs": attrs, "includeText": include_text},
+        )
+        return json.dumps(data, indent=2)
+
+    async def extract_form_data(
+        self,
+        selector: str = "form",
+    ) -> str:
+        if not selector.strip():
+            raise ValueError("selector is required")
+        data = await self.page.evaluate(
+            """
+            (selector) => {
+              const form = document.querySelector(selector);
+              if (!form) throw new Error(`No form matched selector ${selector}`);
+              const out = {};
+              const fields = form.querySelectorAll('input, select, textarea');
+              for (const el of fields) {
+                const key = el.name || el.id || '';
+                if (!key) continue;
+                const tag = (el.tagName || '').toLowerCase();
+                const type = (el.getAttribute('type') || '').toLowerCase();
+                if (tag === 'select') {
+                  out[key] = el.value || '';
+                } else if (type === 'checkbox' || type === 'radio') {
+                  out[key] = !!el.checked;
+                } else if (type === 'file') {
+                  out[key] = Array.from(el.files || []).map(f => f.name);
+                } else {
+                  out[key] = el.value || '';
+                }
+              }
+              return out;
+            }
+            """,
+            selector,
+        )
+        return json.dumps(data, indent=2)
+
+    async def extract_table(
+        self,
+        selector: str,
+    ) -> str:
+        if not selector.strip():
+            raise ValueError("selector is required")
+        data = await self.page.evaluate(
+            """
+            (selector) => {
+              const table = document.querySelector(selector);
+              if (!table) throw new Error(`No table matched selector ${selector}`);
+              const headerCells = table.querySelectorAll('thead th');
+              const headers = headerCells.length
+                ? Array.from(headerCells).map(h => (h.innerText || '').trim())
+                : Array.from(table.querySelectorAll('tr:first-child th, tr:first-child td')).map(h => (h.innerText || '').trim());
+
+              const bodyRows = table.querySelectorAll('tbody tr');
+              const rowsSource = bodyRows.length ? bodyRows : table.querySelectorAll('tr');
+              const rows = [];
+              for (const tr of rowsSource) {
+                const cells = Array.from(tr.querySelectorAll('th, td')).map(td => (td.innerText || '').trim());
+                if (!cells.length) continue;
+                const obj = {};
+                for (let i = 0; i < cells.length; i++) {
+                  const key = headers[i] || `col_${i}`;
+                  obj[key] = cells[i];
+                }
+                rows.push(obj);
+              }
+
+              return { headers, rows, row_count: rows.length };
+            }
+            """,
+            selector,
+        )
+        return json.dumps(data, indent=2)
+
+    async def extract_page_model(self) -> str:
+        data = await self.page.evaluate(
+            """
+            () => {
+              const headings = Array.from(document.querySelectorAll('h1,h2,h3')).map(h => ({
+                level: h.tagName.toLowerCase(),
+                text: (h.innerText || '').trim(),
+              }));
+              const landmarks = Array.from(document.querySelectorAll('main,nav,header,footer,aside,section,form')).map(el => ({
+                tag: el.tagName.toLowerCase(),
+                id: el.id || '',
+                aria_label: el.getAttribute('aria-label') || '',
+              }));
+              const forms = Array.from(document.querySelectorAll('form')).map(f => ({
+                id: f.id || '',
+                action: f.getAttribute('action') || '',
+                field_count: f.querySelectorAll('input,select,textarea').length,
+              }));
+              const interactive_count = document.querySelectorAll("a,button,[role='button'],input,select,textarea").length;
+              return { headings, landmarks, forms, interactive_count };
+            }
+            """
+        )
+        return json.dumps(data, indent=2)
+
     async def dismiss_common_popups(
         self,
         wait_timeout_ms: int = 8_000,
@@ -920,6 +1110,50 @@ class BrowserSession:
                 selector=(None if selector is None else str(selector)),
             )
             return {"message": out}
+        if action == "assert_element_exists":
+            out = await self.assert_element_exists(
+                selector=(None if step.get("selector") is None else str(step.get("selector"))),
+                element_id=(None if step.get("element_id") is None else str(step.get("element_id"))),
+            )
+            return {"message": out}
+        if action == "assert_element_visible":
+            out = await self.assert_element_visible(
+                selector=(None if step.get("selector") is None else str(step.get("selector"))),
+                element_id=(None if step.get("element_id") is None else str(step.get("element_id"))),
+                wait_timeout_ms=int(step.get("wait_timeout_ms", 8_000)),
+            )
+            return {"message": out}
+        if action == "assert_text_contains":
+            out = await self.assert_text_contains(
+                text=str(step.get("text") or ""),
+                selector=(None if step.get("selector") is None else str(step.get("selector"))),
+                case_sensitive=bool(step.get("case_sensitive", False)),
+            )
+            return {"message": out}
+        if action == "assert_url_matches":
+            out = await self.assert_url_matches(
+                pattern=str(step.get("pattern") or ""),
+                regex=bool(step.get("regex", False)),
+            )
+            return {"message": out}
+        if action == "extract_element":
+            attrs = step.get("attributes")
+            raw = await self.extract_element(
+                selector=(None if step.get("selector") is None else str(step.get("selector"))),
+                element_id=(None if step.get("element_id") is None else str(step.get("element_id"))),
+                attributes=(attrs if isinstance(attrs, list) else None),
+                include_text=bool(step.get("include_text", True)),
+            )
+            return {"data": json.loads(raw)}
+        if action == "extract_form_data":
+            raw = await self.extract_form_data(selector=str(step.get("selector") or "form"))
+            return {"data": json.loads(raw)}
+        if action == "extract_table":
+            raw = await self.extract_table(selector=str(step.get("selector") or ""))
+            return {"data": json.loads(raw)}
+        if action == "extract_page_model":
+            raw = await self.extract_page_model()
+            return {"data": json.loads(raw)}
         if action == "select_option":
             out = await self.select_option(
                 selector=(None if step.get("selector") is None else str(step.get("selector"))),

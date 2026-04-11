@@ -25,6 +25,14 @@ ACTION_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     "close_cookie_banner": (),
     "wait_for_selector": ("selector",),
     "wait_for_text": ("text",),
+    "assert_element_exists": (),
+    "assert_element_visible": (),
+    "assert_text_contains": ("text",),
+    "assert_url_matches": ("pattern",),
+    "extract_element": (),
+    "extract_form_data": (),
+    "extract_table": ("selector",),
+    "extract_page_model": (),
     "select_option": (),
     "check_uncheck": (),
     "submit_form": (),
@@ -119,6 +127,17 @@ def _validate_action_specific(index: int, action: str, step: dict[str, Any]) -> 
                 code=ErrorCode.INVALID_STEP,
                 message=(
                     f"Step {index} action 'select_option' requires one of value, label, or index."
+                ),
+            )
+
+    if action in {"assert_element_exists", "assert_element_visible", "extract_element"}:
+        has_selector = not _is_missing(step.get("selector"))
+        has_element_id = not _is_missing(step.get("element_id"))
+        if not (has_selector or has_element_id):
+            raise MCPToolError(
+                code=ErrorCode.INVALID_STEP,
+                message=(
+                    f"Step {index} action {action!r} requires one of selector or element_id."
                 ),
             )
 

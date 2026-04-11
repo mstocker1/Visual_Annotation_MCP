@@ -105,6 +105,29 @@ class FlowContractsTests(unittest.TestCase):
             parse_flow_json('[{"action":"wait_for_text","text":"ok","on_error":"fallback_action"}]')
         self.assertEqual(ctx.exception.code, ErrorCode.INVALID_STEP)
 
+    def test_parse_flow_json_accepts_sprint4_actions(self) -> None:
+        flow = (
+            '[{"action":"assert_text_contains","text":"Revenue"},'
+            '{"action":"assert_url_matches","pattern":"example.com"},'
+            '{"action":"assert_element_exists","selector":"#sales-table"},'
+            '{"action":"extract_element","selector":"#blurb"},'
+            '{"action":"extract_form_data"},'
+            '{"action":"extract_table","selector":"#sales-table"},'
+            '{"action":"extract_page_model"}]'
+        )
+        out = parse_flow_json(flow)
+        self.assertEqual(len(out), 7)
+
+    def test_parse_flow_json_rejects_assert_element_without_locator(self) -> None:
+        with self.assertRaises(MCPToolError) as ctx:
+            parse_flow_json('[{"action":"assert_element_exists"}]')
+        self.assertEqual(ctx.exception.code, ErrorCode.INVALID_STEP)
+
+    def test_parse_flow_json_rejects_extract_element_without_locator(self) -> None:
+        with self.assertRaises(MCPToolError) as ctx:
+            parse_flow_json('[{"action":"extract_element"}]')
+        self.assertEqual(ctx.exception.code, ErrorCode.INVALID_STEP)
+
 
 if __name__ == "__main__":
     unittest.main()

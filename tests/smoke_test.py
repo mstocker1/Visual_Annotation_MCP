@@ -180,10 +180,34 @@ label { display: block; }
         return "data:text/html;charset=utf-8," + quote(html)
 
 
+def _extract_page_data_url() -> str:
+        html = """<!DOCTYPE html><html><head><meta charset="utf-8"><title>Extract Test</title></head><body>
+    <header><h1>Dashboard</h1></header>
+    <main>
+        <section aria-label="Metrics">
+            <h2>Revenue</h2>
+            <p id="blurb">Monthly summary</p>
+        </section>
+        <table id="sales-table">
+            <thead>
+                <tr><th>Product</th><th>Units</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>Alpha</td><td>10</td></tr>
+                <tr><td>Beta</td><td>7</td></tr>
+            </tbody>
+        </table>
+    </main>
+    <footer>End</footer>
+</body></html>"""
+        return "data:text/html;charset=utf-8," + quote(html)
+
+
 async def main() -> None:
     url = _sample_page_data_url()
     flow_url = _flow_page_data_url()
     form_url = _form_page_data_url()
+    extract_url = _extract_page_data_url()
     session = BrowserSession()
     await session.start()
     try:
@@ -420,6 +444,54 @@ async def main() -> None:
         assert flow_result3["steps_executed"] == 4
         assert "blk" in flow_result3.get("context", {})
         assert any(r.get("status") == "skipped" for r in flow_result3["results"])
+
+        # 17. Sprint 4 assertions and extraction tools.
+        await session.navigate(extract_url)
+        assert "Assertion passed" in await session.assert_element_exists(selector="#sales-table")
+        assert "Assertion passed" in await session.assert_element_visible(selector="#sales-table")
+        assert "Assertion passed" in await session.assert_text_contains("Monthly summary")
+        assert "Assertion passed" in await session.assert_url_matches("data:text/html")
+
+        element_data = json.loads(
+            await session.extract_element(
+                selector="#blurb",
+                attributes=["id"],
+                include_text=True,
+            )
+        )
+        assert element_data["id"] == "blurb"
+        assert "Monthly summary" in element_data.get("text", "")
+
+        table_data = json.loads(await session.extract_table("#sales-table"))
+        assert table_data["row_count"] >= 2
+        assert table_data["rows"][0]["Product"] == "Alpha"
+
+        page_model = json.loads(await session.extract_page_model())
+        assert page_model["interactive_count"] >= 0
+        assert any(h.get("text") == "Dashboard" for h in page_model["headings"])
+
+        # 18. Sprint 4 flow actions.
+        flow_result4 = json.loads(
+            await session.run_flow(
+                [
+                    {"action": "extract_page_model", "store_as": "pm"},
+                    {"action": "assert_text_contains", "text": "Revenue"},
+                    {
+                        "action": "extract_table",
+                        "selector": "#sales-table",
+                        "store_as": "tbl",
+                    },
+                    {
+                        "action": "assert_element_exists",
+                        "selector": "#sales-table",
+                        "if_var": "tbl",
+                    },
+                ]
+            )
+        )
+        assert flow_result4["ok"] is True
+        assert "pm" in flow_result4.get("context", {})
+        assert "tbl" in flow_result4.get("context", {})
 
         print("smoke_test: OK")
         print(
