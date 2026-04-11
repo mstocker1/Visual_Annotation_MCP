@@ -3,6 +3,7 @@
 [![PyPI](https://img.shields.io/pypi/v/visual-annotation-mcp.svg)](https://pypi.org/project/visual-annotation-mcp/)
 [![Python](https://img.shields.io/pypi/pyversions/visual-annotation-mcp.svg)](https://pypi.org/project/visual-annotation-mcp/)
 [![License](https://img.shields.io/pypi/l/visual-annotation-mcp.svg)](LICENSE)
+[![CI](https://github.com/mstocker1/Visual_Annotation_MCP/actions/workflows/ci.yml/badge.svg)](https://github.com/mstocker1/Visual_Annotation_MCP/actions/workflows/ci.yml)
 
 A Model Context Protocol server that lets an LLM open web pages, list the
 interactive elements on them, take screenshots, and draw annotations —
@@ -107,8 +108,25 @@ outside the target's bounding box, leaving the element sharp. Good for
 - Risks and release gates: `docs/sprints/RISKS_AND_GATES.md`
 - Swarm planning notes: `docs/sprints/SWARM_NOTES.md`
 - Flow v2 contract: `docs/sprints/FLOW_V2_CONTRACT.md`
+- Sprint 6 closeout: `docs/sprints/SPRINT6_CLOSEOUT.md`
 - Operations runbook: `docs/OPERATIONS.md`
 - Release notes and migration guidance: `docs/RELEASE_NOTES_AND_MIGRATION.md`
+- Changelog: `CHANGELOG.md`
+
+## Release Readiness Gates
+
+For local pre-release verification:
+
+```bash
+python -m pip install -e .[dev]
+ruff check visual_annotation_mcp tests/test_flow_contracts.py tests/test_flow_executor.py tests/test_observability.py tests/test_security.py
+pydocstyle visual_annotation_mcp
+mypy visual_annotation_mcp
+coverage run -m unittest discover -s tests -p "test_*.py"
+coverage report
+python tests/smoke_test.py
+pip-audit --ignore-vuln CVE-2026-1703
+```
 
 ## Installation
 
